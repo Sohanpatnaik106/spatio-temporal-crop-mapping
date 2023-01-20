@@ -1,0 +1,56 @@
+task: crop-mapping
+num_workers: 1
+load_path: resnet_lstm
+save_model_optimizer: False
+seed: 0
+
+data:
+    data_dir: /scratch/21ai91r07/dataset
+    data_file: download
+    gt_file: labels.csv
+    fold: 1
+    time_downsample_factor: 2
+    num_channel: 4
+    apply_cloud_masking: False
+    cloud_threshold: 0.1
+    return_cloud_cover: False
+    small_train_set_mode: False
+    batch_size: 8
+
+training:
+    optim_function: adam
+    optim_params:
+        lr: 2e-5
+        weight_decay: 1e-4
+    sched_function: cosine_annealing_lr
+    sched_func_params: {}
+    sched_params:
+        monitor: val_loss
+    train_reader: True
+    train_retriever: True
+    evaluate_every: 1
+    epochs: 1
+
+evaluate:
+    ignore_channels: None
+    threshold: None
+
+model:
+    model_name: ResNetLSTM
+    save_path: /scratch/21ai91r07/checkpoint
+    pretrained: True
+    lstm_input_size: 1000
+    lstm_hidden_size: 256
+    lstm_num_layers: 3
+    lstm_bias: False
+    batch_first: True
+    lstm_dropout: 0.3
+    bidirectional: True
+    feature_map_size: 64
+    output_map_size: 24
+    num_classes: 120
+
+metrics:
+    eps: 0.0000001
+    threshold: None
+    ignore_channels: None
