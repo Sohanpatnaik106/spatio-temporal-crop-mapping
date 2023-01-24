@@ -37,7 +37,7 @@ if __name__ == "__main__":
                                 time_downsample_factor = config.data.time_downsample_factor, num_channel = config.data.num_channel, 
                                 apply_cloud_masking = config.data.apply_cloud_masking, cloud_threshold = config.data.cloud_threshold,
                                 return_cloud_cover = config.data.return_cloud_cover, small_train_set_mode = config.data.small_train_set_mode)
-    test_dataset = CropDataset(data_path, gt_path, mode = "test", eval_mode = True, fold = config.data.fold,
+    test_dataset = CropDataset(data_path, gt_path, mode = "test", eval_mode = False, fold = config.data.fold,
                                 time_downsample_factor = config.data.time_downsample_factor, num_channel = config.data.num_channel, 
                                 apply_cloud_masking = config.data.apply_cloud_masking, cloud_threshold = config.data.cloud_threshold,
                                 return_cloud_cover = config.data.return_cloud_cover, small_train_set_mode = config.data.small_train_set_mode)

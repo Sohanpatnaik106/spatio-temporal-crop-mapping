@@ -5,22 +5,22 @@ save_model_optimizer: False
 seed: 0
 
 data:
-    data_dir: /scratch/21ai91r07/dataset
+    data_dir: /home/sohan/scratch/zuericrop
     data_file: download
     gt_file: labels.csv
-    fold: 1
+    fold: ~
     time_downsample_factor: 2
     num_channel: 4
     apply_cloud_masking: False
     cloud_threshold: 0.1
     return_cloud_cover: False
     small_train_set_mode: False
-    batch_size: 8
+    batch_size: 128
 
 training:
     optim_function: adam
     optim_params:
-        lr: 2e-5
+        lr: 1e-4
         weight_decay: 1e-4
     sched_function: cosine_annealing_lr
     sched_func_params: {}
@@ -32,8 +32,8 @@ training:
     epochs: 1
 
 evaluate:
-    ignore_channels: None
-    threshold: None
+    ignore_channels: ~
+    threshold: ~
 
 model:
     model_name: ResNetLSTM
@@ -52,5 +52,5 @@ model:
 
 metrics:
     eps: 0.0000001
-    threshold: None
-    ignore_channels: None
+    threshold: ~
+    ignore_channels: ~

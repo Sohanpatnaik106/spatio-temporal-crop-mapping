@@ -6,6 +6,8 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 
+# TODO: Split the dataset after initialising self.data into train, val and test (as test and train data are coming out to be same)
+
 class CropDataset(Dataset):
     def __init__(self, data_path, gt_path, t = 0.9, mode = 'all', eval_mode = False, fold = None,
                  time_downsample_factor = 2, num_channel = 4, apply_cloud_masking = False, cloud_threshold = 0.1,
@@ -26,6 +28,7 @@ class CropDataset(Dataset):
         print(np.unique(self.data["gt"]).shape)
 
         self.samples = self.data["data"].shape[0]
+
         self.max_obs = self.data["data"].shape[1]
         self.spatial = self.data["data"].shape[2:-1]
         self.t = t
@@ -36,10 +39,9 @@ class CropDataset(Dataset):
         self.apply_cloud_masking = apply_cloud_masking
         self.cloud_threshold = cloud_threshold
         self.return_cloud_cover = return_cloud_cover
+        self.small_train_set_mode = small_train_set_mode
 
-
-
-        if small_train_set_mode:
+        if self.small_train_set_mode:
             print('Small training-set mode - fold: ', fold, '  Mode: ', mode)
             self.valid_list = self._split_train_test_23(mode, self.fold)
 
@@ -285,6 +287,8 @@ class CropDataset(Dataset):
         
     def _split(self, mode):
         valid = np.zeros(self.samples)
+        print(valid.shape)
+
         if mode=='test':
             valid[int(self.samples*0.75):] = 1.
         elif mode=='train':
@@ -293,9 +297,10 @@ class CropDataset(Dataset):
             valid[:] = 1.
 
         w,h = self.data["gt"][0,...,0].shape
-        for i in range(self.samples):
-            if np.sum( self.data["gt"][i,...,0] != 0 )/(w*h) < self.t:
-                valid[i] = 0
+
+        # for i in range(self.samples):
+        #     if np.sum(self.data["gt"][i, ..., 0] != 0 )/(w*h) < self.t:
+        #         valid[i] = 0
         
         return np.nonzero(valid)[0]
 

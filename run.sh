@@ -7,7 +7,7 @@
 #SBATCH --time=2:00:00
 #SBATCH --array=0
 
-module load anaconda/3
-conda activate btp
+module load anaconda3/
+conda activate nas
 
 python main.py
