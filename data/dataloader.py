@@ -6,9 +6,8 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 
-# TODO: Split the dataset after initialising self.data into train, val and test (as test and train data are coming out to be same)
-
 class CropDataset(Dataset):
+    
     def __init__(self, data_path, gt_path, t = 0.9, mode = 'all', eval_mode = False, fold = None,
                  time_downsample_factor = 2, num_channel = 4, apply_cloud_masking = False, cloud_threshold = 0.1,
                  return_cloud_cover = False, small_train_set_mode = False):
@@ -18,17 +17,9 @@ class CropDataset(Dataset):
 
         self.data = h5py.File(self.data_path, "r", libver='latest', swmr = True)
 
-        # print(self.data.keys())
-        # print(self.data["data"][0])
-        # print(self.data.keys())
-        print(self.data["data"].shape)
-        print(self.data["gt"].shape)
-        # print(self.samples)
-
-        print(np.unique(self.data["gt"]).shape)
+        print(f"Loading {mode} data\n")
 
         self.samples = self.data["data"].shape[0]
-
         self.max_obs = self.data["data"].shape[1]
         self.spatial = self.data["data"].shape[2:-1]
         self.t = t
@@ -41,6 +32,8 @@ class CropDataset(Dataset):
         self.return_cloud_cover = return_cloud_cover
         self.small_train_set_mode = small_train_set_mode
 
+        self.mode = mode
+
         if self.small_train_set_mode:
             print('Small training-set mode - fold: ', fold, '  Mode: ', mode)
             self.valid_list = self._split_train_test_23(mode, self.fold)
@@ -51,7 +44,7 @@ class CropDataset(Dataset):
 
         else:
             self.valid_list = self._split(mode)
-        
+
         self.valid_samples = self.valid_list.shape[0]
 
         self.time_downsample_factor = time_downsample_factor
@@ -66,11 +59,6 @@ class CropDataset(Dataset):
             tier_2.append(line[-4])
             tier_3.append(line[-3])
             tier_4.append(line[-2])
-
-        print(tier_1)
-        print(tier_2)
-        print(tier_3)
-        print(tier_4)
     
         tier_2[0], tier_3[0], tier_4[0] = '0_unknown', '0_unknown', '0_unknown'
     
@@ -89,8 +77,6 @@ class CropDataset(Dataset):
             if tier_4[i] == '':
                 tier_4[i] = '0_unknown'
 
-        print(self.label_list)
-
         tier_2_elements, tier_3_elements, tier_4_elements = list(set(tier_2)), list(set(tier_3)), list(set(tier_4))
         tier_2_elements.sort()
         tier_3_elements.sort()
@@ -102,11 +88,6 @@ class CropDataset(Dataset):
             tier_2_.append(tier_2_elements.index(tier_2[i]))
             tier_3_.append(tier_3_elements.index(tier_3[i]))
             tier_4_.append(tier_4_elements.index(tier_4[i])) 
-
-        print("\n")
-        print(tier_4_elements)  # Sorted
-        print(tier_4)           # Actual order
-        print(tier_4_)          # Element indices 
 
         self.label_list_local_1, self.label_list_local_2, self.label_list_glob = [], [], []
         self.label_list_local_1_name, self.label_list_local_2_name, self.label_list_glob_name = [], [], []
@@ -120,11 +101,6 @@ class CropDataset(Dataset):
             self.label_list_local_2_name.append(tier_3[int(gt)])
             self.label_list_glob_name.append(tier_4[int(gt)])
 
-        print("\n")
-        print(self.label_list_glob)
-        print("\n")
-        print(self.label_list_glob_name)
-
         self.n_classes = max(self.label_list_glob) + 1
         self.n_classes_local_1 = max(self.label_list_local_1) + 1
         self.n_classes_local_2 = max(self.label_list_local_2) + 1
@@ -136,20 +112,6 @@ class CropDataset(Dataset):
         print('Number of classes: ', self.n_classes)
         print('Number of classes - local-1: ', self.n_classes_local_1)
         print('Number of classes - local-2: ', self.n_classes_local_2)
-
-        #for consistency loss---------------------------------------------------------
-        # self.l1_2_g = np.zeros(self.n_classes)
-        # self.l2_2_g = np.zeros(self.n_classes)
-        # self.l1_2_l2 = np.zeros(self.n_classes_local_2)
-        
-        # for i in range(1,self.n_classes):
-        #     if i in self.label_list_glob:
-        #         self.l1_2_g[i] = self.label_list_local_1[self.label_list_glob.index(i)]
-        #         self.l2_2_g[i] = self.label_list_local_2[self.label_list_glob.index(i)]
-        
-        # for i in range(1,self.n_classes_local_2):
-        #     if i in self.label_list_local_2:
-        #         self.l1_2_l2[i] = self.label_list_local_1[self.label_list_local_2.index(i)]
 
     def __len__(self):
         return self.valid_samples
@@ -176,17 +138,12 @@ class CropDataset(Dataset):
 
         #Change labels 
         target = np.zeros_like(target_)
-        # target_local_1 = np.zeros_like(target_)
-        # target_local_2 = np.zeros_like(target_)
+
         for i in range(len(self.label_list)):
             target[target_ == self.label_list[i]] = self.label_list_glob[i]
-            # target_local_1[target_ == self.label_list[i]] = self.label_list_local_1[i]
-            # target_local_2[target_ == self.label_list[i]] = self.label_list_local_2[i]
         
         X = torch.from_numpy(X)
         target = torch.from_numpy(target).float()
-        # target_local_1 = torch.from_numpy(target_local_1).float()
-        # target_local_2 = torch.from_numpy(target_local_2).float()
 
         if self.apply_cloud_masking or self.return_cloud_cover:
             CC = torch.from_numpy(CC).float()
@@ -205,27 +162,21 @@ class CropDataset(Dataset):
             X = X * CC_mask.float()
 
         #augmentation
-        if self.eval_mode==False and np.random.rand() < self.augment_rate:
+        if self.eval_mode==False and np.random.rand() < self.augment_rate and self.mode != "test":
 
             flip_dir  = np.random.randint(3)
 
             if flip_dir == 0:
                 X = X.flip(2)
                 target = target.flip(0)
-                # target_local_1 = target_local_1.flip(0)
-                # target_local_2 = target_local_2.flip(0)
 
             elif flip_dir == 1:
                 X = X.flip(3)
                 target = target.flip(1)
-                # target_local_1 = target_local_1.flip(1)
-                # target_local_2 = target_local_2.flip(1)
 
             elif flip_dir == 2:
                 X = X.flip(2,3)
                 target = target.flip(0, 1)  
-                # target_local_1 = target_local_1.flip(0, 1)  
-                # target_local_2 = target_local_2.flip(0, 1)
 
         if self.return_cloud_cover:
 
@@ -275,15 +226,6 @@ class CropDataset(Dataset):
                 }
                 
         return batch
-
-    # def get_rid_small_fg_tiles(self):
-    #     valid = np.ones(self.samples)
-    #     w,h = self.data["gt"][0,...,0].shape
-    #     for i in range(self.samples):
-    #         if np.sum( self.data["gt"][i,...,0] != 0 )/(w*h) < self.t:
-    #             valid[i] = 0
-        
-    #     return np.nonzero(valid)[0]
         
     def _split(self, mode):
         valid = np.zeros(self.samples)
@@ -297,10 +239,6 @@ class CropDataset(Dataset):
             valid[:] = 1.
 
         w,h = self.data["gt"][0,...,0].shape
-
-        # for i in range(self.samples):
-        #     if np.sum(self.data["gt"][i, ..., 0] != 0 )/(w*h) < self.t:
-        #         valid[i] = 0
         
         return np.nonzero(valid)[0]
 
@@ -364,52 +302,3 @@ class CropDataset(Dataset):
                 valid[i] = 0
 
         return np.nonzero(valid)[0]
-
-
-
-
-
-
-    # def chooose_dates(self):
-    #     samples = self.data["cloud_cover"][0::10,...]
-    #     samples = np.mean(samples, axis=(0,2,3))
-    #     return np.nonzero(samples<0.1)
-
-    # def chooose_dates_2(self):
-    #     data_dir = '/home/pf/pfstaff/projects/ozgur_deep_filed/data_crop_CH/train_set_24x24/'
-    #     DATA_YEAR = '2019'
-    #     date_list = []
-    #     batch_dirs = os.listdir(data_dir)
-    #     for batch_count, batch in enumerate(batch_dirs):
-    #         for filename in glob.iglob(data_dir + batch + '/**/patches_res_R10m.npz', recursive=True):
-    #                 date = filename.find(DATA_YEAR)
-    #                 date = filename[date:date+8]
-    #                 if date not in date_list:
-    #                     date_list.append(date)
-        
-    #     dates_text_file = open("./dates_1.txt", "r")
-    #     specific_dates = dates_text_file.readlines()
-
-    #     print('Number of dates: ', len(specific_dates))
-    #     specific_date_indexes = np.zeros(len(specific_dates))
-    #     for i in range(len(specific_dates)):
-    #         specific_date_indexes[i] = date_list.index(specific_dates[i][:-1])
-            
-    #     return specific_date_indexes.astype(int)
-
-    # def data_stat(self):
-    #     class_labels = np.unique(self.label_list_glob)
-    #     class_names = np.unique(self.label_list_glob_name)
-    #     class_fq = np.zeros_like(class_labels)
-        
-    #     for i in range(self.__len__()): 
-    #         temp = self.__getitem__(i)[1].flatten()
-    
-    #         for j in range(class_labels.shape[0]):
-    #            class_fq[j] += torch.sum(temp==class_labels[j]) 
-
-    #     for x in class_names:
-    #         print(x)
-            
-    #     for x in class_fq:
-    #         print(x)

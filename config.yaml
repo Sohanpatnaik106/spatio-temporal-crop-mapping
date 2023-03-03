@@ -15,7 +15,7 @@ data:
     cloud_threshold: 0.1
     return_cloud_cover: False
     small_train_set_mode: False
-    batch_size: 128
+    batch_size: 8
 
 training:
     optim_function: adam
@@ -36,10 +36,10 @@ evaluate:
     threshold: ~
 
 model:
-    model_name: ResNetLSTM
+    model_name: DeformableConvLSTM
     save_path: /scratch/21ai91r07/checkpoint
     pretrained: True
-    lstm_input_size: 1000
+    lstm_input_size: 512
     lstm_hidden_size: 256
     lstm_num_layers: 3
     lstm_bias: False
@@ -49,6 +49,9 @@ model:
     feature_map_size: 64
     output_map_size: 24
     num_classes: 120
+    deform: True
+    min_deform_layer: 3
+    modulation: True
 
 metrics:
     eps: 0.0000001

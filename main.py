@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 import yaml
 
 from utils import Config
-from src import ResNetLSTM
+from src import ResNetLSTM, VGGLSTM, DeformableConvLSTM
 
 import torch
 import torch.nn as nn
@@ -22,10 +22,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config) as f:
         config = yaml.safe_load(f)
-        # TODO: Initialise wandb here
-		# wandb.init(name = config["wandb_path"], entity = "agv",
-		# 		   project = 'interiit-devrev', config = config)
-        
         config = Config(**config)
 
     set_seed(config.seed)
@@ -49,19 +45,15 @@ if __name__ == "__main__":
 
     if config.model.model_name == "ResNetLSTM":
         model = ResNetLSTM(config)
-
-    # for name, p in model.named_parameters():
-    total_params = sum(param.numel() for param in model.parameters())
-    # print(total_params)
-    # exit(0)
-
-
-
+    elif config.model.model_name == "VGGLSTM":
+        model = VGGLSTM(config)
+    elif config.model.model_name == "DeformableConvLSTM":
+        model = DeformableConvLSTM(config)
     
-    # for idx, batch in enumerate(train_dataloader):
+    print(f"Model: {config.model.model_name} \n{model}")
+    exit(0)
 
-    #     out = model(batch["sample"])
-    #     break
+    total_params = sum(param.numel() for param in model.parameters())
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     optimizer = torch.optim.Adam(model.parameters(), lr = float(config.training.optim_params.lr), weight_decay = float(config.training.optim_params.weight_decay))
@@ -70,14 +62,7 @@ if __name__ == "__main__":
     trainer = Trainer(config, model, optimizer, criterion, device)
 
     trainer.train(train_dataloader, test_dataloader)
-    iou = trainer.compute_metrics(test_dataloader)
-    print(iou)
-
-    # TODO:
-    #   1. Create model
-    #   2. Create optimizer 
-    #   3. Create trainer
-    #   4. Train and evaluate
-    #   5. Wandb logging
-                    
-    
+    train_metrics = trainer.compute_metrics(train_dataloader)
+    test_metrics = trainer.compute_metrics(test_dataloader)
+    print(f"\nTrain Metrics: {train_metrics}")
+    print(f"Test Metrics: {test_metrics}\n")

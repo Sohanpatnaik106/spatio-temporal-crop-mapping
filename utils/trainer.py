@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import os
+from torch.optim.lr_scheduler import CosineAnnealingLR, MultiStepLR
 
 class Trainer():
 
@@ -13,6 +16,13 @@ class Trainer():
         self.criterion = criterion
         self.device = device
 
+        if self.config.sched_function == "cosine_annealing_lr":
+            self.scheduler = CosineAnnealingLR(self.optimizer, self.config.training.epochs)
+        elif self.config.sched_function == "multi_step_lr":
+            self.scheduler = MultiStepLR(self.optimizer, [i * 5 for i in range(self.config.training.epochs)])
+
+        self.best_val_loss = np.finfo(np.float32).max
+
         self.model.to(self.device)
 
     def _train_step(self, dataloader, epoch):
@@ -20,7 +30,7 @@ class Trainer():
         total_loss = 0
         tepoch = tqdm(dataloader, unit="batch", position=0, leave=True)
         for batch_idx, batch in enumerate(tepoch):
-            tepoch.set_description(f"Epoch {epoch + 1}")
+            tepoch.set_description(f"INFO: Epoch {epoch + 1}")
 
             out = self.model(batch["sample"].to(self.device))
 
@@ -39,18 +49,19 @@ class Trainer():
         self.model.train()
         for epoch in range(self.config.training.epochs):
             self._train_step(train_dataloader, epoch)
+            self.scheduler.step()
             
             if ((val_dataloader is not None) and (((epoch + 1) % self.config.training.evaluate_every)) == 0):
                 val_loss = self.evaluate(val_dataloader)
                 
-                # if self.best_val_loss >= val_loss and self.config.save_model_optimizer:
-                #   self.best_val_loss = val_loss
-                #   print("Saving best model and optimizer at checkpoints/{}/model_optimizer.pt".format(self.config.load_path))
-                #   os.makedirs("checkpoints/{}/".format(self.config.load_path), exist_ok=True)
-                #   torch.save({
-                #         'model_state_dict': self.model.state_dict(),
-                #         'optimizer_state_dict': self.optimizer.state_dict(),
-                #       }, "checkpoints/{}/model_optimizer.pt".format(self.config.load_path))
+                if self.best_val_loss >= val_loss and self.config.save_model_optimizer:
+                  self.best_val_loss = val_loss
+                  print(f"Saving best model and optimizer at checkpoints/{self.config.model.model_name}/model_optimizer.pt")
+                  os.makedirs(f"checkpoints/{self.config.model.model_name}/", exist_ok = True)
+                  torch.save({
+                        'model_state_dict': self.model.state_dict(),
+                        'optimizer_state_dict': self.optimizer.state_dict(),
+                      }, f"checkpoints/{self.config.model.model_name}/model_optimizer.pt")
                 self.model.train()
 
     def evaluate(self, dataloader):
@@ -58,7 +69,7 @@ class Trainer():
         
         total_loss = 0
         tepoch = tqdm(dataloader, unit="batch", position=0, leave=True)
-        tepoch.set_description("Validation Step")
+        tepoch.set_description("INFO: Validation Step")
         
         with torch.no_grad():
             for batch_idx, batch in enumerate(tepoch):
@@ -74,6 +85,10 @@ class Trainer():
     def compute_metrics(self, dataloader):
 
         batch_iou = []
+        batch_accuracy = []
+        batch_precision = []
+        batch_recall = []
+        batch_f1_score = []
         self.model.eval()
         
         total_loss = 0
@@ -87,11 +102,20 @@ class Trainer():
                 out = torch.argmax(out, dim = 1)
 
                 batch_iou.extend(self._iou(out, batch["target"], eps = self.config.metrics.eps).detach().cpu().tolist())
+                batch_accuracy.append(self._accuracy(out, batch["target"]))
+                batch_precision.append(self._precision(out, batch["target"]))
+                batch_recall.append(self._recall(out, batch["target"]))
+                batch_f1_score.append(self._f1_score(out, batch["target"]))
 
-        # iou = self._iou(pr, gt, eps = self.config.metrics.eps, threshold = self.config.metrics.threshold, ignore_channels = self.config.metrics.ignore_channels)
-        # iou = self._iou(pr, gt, eps = self.config.metrics.eps)
-        iou = np.mean(batch_iou)
-        return iou
+        results = {
+            "accuracy": np.mean(batch_accuracy),
+            "precision": np.mean(batch_precision),
+            "recall": np.mean(batch_recall),
+            "f1_score": np.mean(batch_f1_score),
+            "iou": np.mean(batch_iou)
+        }
+
+        return results
 
 
     def _iou(self, outputs: torch.Tensor, labels: torch.Tensor, eps: float):
@@ -109,37 +133,31 @@ class Trainer():
 
         return thresholded  # Or thresholded.mean() if you are interested in average across the batch
 
+    def _accuracy(self, outputs, labels):
+        # NOTE: Weighted accuracy can be computed later
+        # TODO: Implement class wise accuracy
+        outputs = outputs.numpy().flatten()
+        labels = labels.numpy().flatten()
+        # print(outputs, labels)
+        return accuracy_score(outputs, labels)
 
-    # def _take_channels(self, *xs, ignore_channels = None):
-    #     if ignore_channels is None:
-    #         return xs
-    #     else:
-    #         channels = [channel for channel in range(xs[0].shape[1]) if channel not in ignore_channels]
-    #         xs = [torch.index_select(x, dim = 1, index = torch.tensor(channels).to(x.device)) for x in xs]
-    #         return 
+    def _precision(self, outputs, labels):
+        # NOTE: Weighted precision can be computed later
+        # TODO: Implement class wise precision
+        outputs = outputs.numpy().flatten()
+        labels = labels.numpy().flatten()
+        return precision_score(outputs, labels, average='micro')
 
-    # # Function to modify x based on the threshold
-    # def _threshold(self, x, threshold = None):
-    #     if threshold is not None:
-    #         return (x > threshold).type(x.dtype)
-    #     else:
-    #         return x
+    def _recall(self, outputs, labels):
+        # NOTE: Weighted recall can be computed later
+        # TODO: Implement class wise recall
+        outputs = outputs.numpy().flatten()
+        labels = labels.numpy().flatten()
+        return recall_score(outputs, labels, average='micro')
 
-    # # Function to calculate the IoU score
-    # def _iou(self, pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
-    #     """Calculate Intersection over Union between ground truth and prediction
-    #     Args:
-    #         pr (torch.Tensor): predicted tensor
-    #         gt (torch.Tensor):  ground truth tensor
-    #         eps (float): epsilon to avoid zero division
-    #         threshold: threshold for outputs binarization
-    #     Returns:
-    #         float: IoU (Jaccard) score
-    #     """
-
-    #     pr = self._threshold(pr, threshold = threshold)
-    #     pr, gt = self._take_channels(pr, gt, ignore_channels = ignore_channels)
-
-    #     intersection = torch.sum(gt * pr)
-    #     union = torch.sum(gt) + torch.sum(pr) - intersection + eps
-    #     return (intersection + eps) / union
+    def _f1_score(self, outputs, labels):
+        # NOTE: Weighted f1_score can be computed later
+        # TODO: Implement class wise f1_score
+        outputs = outputs.numpy().flatten()
+        labels = labels.numpy().flatten()
+        return f1_score(outputs, labels, average='micro')

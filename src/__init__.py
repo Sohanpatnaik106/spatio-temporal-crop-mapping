@@ -1,1 +1,1 @@
-from .model import ResNetLSTM, CNNDecoder
+from .model import ResNetLSTM, CNNDecoder, VGGLSTM, DeformableConvLSTM
